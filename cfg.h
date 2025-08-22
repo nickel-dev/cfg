@@ -54,6 +54,9 @@ struct cfg_data {
 	cfg_section_t *sections;
 };
 
+// FNV hash
+uint64_t cfg_hash(char *string);
+
 // Sections
 cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index);
 cfg_section_t *cfg_section_get(cfg_data_t *data, char *name);
@@ -111,16 +114,6 @@ struct _cfg_token {
 };
 
 // Internal functions
-static uint64_t _cfg_hash(char *string) {
-	uint64_t hash = 14695981039346656037ULL; // FNV offset basis
-	int32_t c;
-	while ((c = *string++)) {
-		hash ^= (uint64_t)c;
-		hash *= 1099511628211ULL; // FNV prime
-	}
-	return hash;
-}
-
 static inline char *_cfg_bool_string(int32_t n) {
 	return (n ? "true" : "false");
 }
@@ -297,8 +290,8 @@ static _cfg_token_t *_cfg_tokenize(char *source) {
 
 static cfg_value_t _cfg_token_value(_cfg_token_t **token) {
 	cfg_value_t value = { 0 };
-	const uint64_t true_hash = _cfg_hash("true");
-	const uint64_t false_hash = _cfg_hash("false");
+	const uint64_t true_hash = cfg_hash("true");
+	const uint64_t false_hash = cfg_hash("false");
 	if (*token) {
 		switch ((*token)->type) {
 		case _CFG_TOKEN_STRING:
@@ -311,7 +304,7 @@ static cfg_value_t _cfg_token_value(_cfg_token_t **token) {
 			value = (cfg_value_t) { CFG_FLOAT, { .value_float = atof((*token)->string) } };
 			break;
 		case _CFG_TOKEN_IDENTIFIER:
-			uint64_t hash = _cfg_hash((*token)->string);
+			uint64_t hash = cfg_hash((*token)->string);
 			if (hash == true_hash)
 				value = (cfg_value_t) { CFG_BOOL, { .value_bool = 1 } };
 			else if (hash == false_hash)
@@ -331,6 +324,17 @@ static cfg_value_t _cfg_token_value(_cfg_token_t **token) {
 		}
 	}
 	return value;
+}
+
+// FNV hash
+uint64_t cfg_hash(char *string) {
+	uint64_t hash = 14695981039346656037ULL; // FNV offset basis
+	int32_t c;
+	while ((c = *string++)) {
+		hash ^= (uint64_t)c;
+		hash *= 1099511628211ULL; // FNV prime
+	}
+	return hash;
 }
 
 // Sections
@@ -356,9 +360,9 @@ cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index) {
 }
 
 cfg_section_t *cfg_section_get(cfg_data_t *data, char *name) {
-	uint64_t hash = _cfg_hash(name);
+	uint64_t hash = cfg_hash(name);
 	for (uint32_t i = 0; i < data->count; ++i) {
-		uint64_t h = _cfg_hash(data->sections[i].name);
+		uint64_t h = cfg_hash(data->sections[i].name);
 		if (hash == h)
 			return &data->sections[i];
 	}
@@ -366,9 +370,9 @@ cfg_section_t *cfg_section_get(cfg_data_t *data, char *name) {
 }
 
 int64_t cfg_section_index(cfg_data_t *data, char *name) {
-	uint64_t hash = _cfg_hash(name);
+	uint64_t hash = cfg_hash(name);
 	for (uint32_t i = 0; i < data->count; ++i) {
-		uint64_t h = _cfg_hash(data->sections[i].name);
+		uint64_t h = cfg_hash(data->sections[i].name);
 		if (hash == h)
 			return i;
 	}
@@ -489,9 +493,9 @@ cfg_variable_t *cfg_variable_add(cfg_section_t *section, char *name, cfg_value_t
 }
 
 cfg_variable_t *cfg_variable_get(cfg_section_t *section, char *name) {
-	uint64_t hash = _cfg_hash(name);
+	uint64_t hash = cfg_hash(name);
 	for (uint32_t i = 0; i < section->count; ++i) {
-		uint64_t h = _cfg_hash(section->variables[i].name);
+		uint64_t h = cfg_hash(section->variables[i].name);
 		if (hash == h)
 			return &section->variables[i];
 	}
@@ -499,9 +503,9 @@ cfg_variable_t *cfg_variable_get(cfg_section_t *section, char *name) {
 }
 
 int64_t cfg_variable_index(cfg_section_t *section, char *name) {
-	uint64_t hash = _cfg_hash(name);
+	uint64_t hash = cfg_hash(name);
 	for (uint32_t i = 0; i < section->count; ++i) {
-		uint64_t h = _cfg_hash(section->variables[i].name);
+		uint64_t h = cfg_hash(section->variables[i].name);
 		if (hash == h)
 			return i;
 	}
@@ -581,7 +585,7 @@ cfg_data_t cfg_data_read(char *source) {
 	}
 
 	// Free the tokens
-	for (_cfg_token_t *token = root_token; token != NULL; token = token->next) {
+	for (_cfg_token_t *token = root_token; token != NULL;) {
 		_cfg_token_t *t = token;
 		if (t) {
 			token = token->next;
@@ -628,8 +632,10 @@ cfg_data_t cfg_data_read_file(char *path) {
 }
 
 void cfg_data_free(cfg_data_t *data) {
-	for (uint32_t i = 0; i < data->count; ++i)
-		cfg_section_remove(data, i);
+	if (data->sections) {
+		for (uint32_t i = 0; i < data->count; ++i)
+			cfg_section_remove(data, i);
+	}
 }
 
 #endif // CFG_IMPLEMENTATION
