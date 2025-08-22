@@ -1,0 +1,14 @@
+- [x] Add list type
+- [x] Add list type to cfg_data_write
+- [x] Add cfg_data_read
+	- [x] Tokenizer
+	- [x] Parser
+- [x] Freeing properly
+	- [x] Tokens
+	- [x] Strings
+	- [x] Lists
+- [x] Add automatic names and NULL strings
+- [x] Add booleans
+- [x] Add negative numbers
+- [x] Function to get section and variable index by pointer offset
+- [x] Add cfg_data_free
