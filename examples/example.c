@@ -7,7 +7,7 @@ char *type_string(uint32_t type);
 void print_value(cfg_value_t value);
 void print_list(cfg_list_t *list);
 
-int32_t main(int32_t argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 

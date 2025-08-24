@@ -25,7 +25,7 @@ char *data_type_string(uint32_t data_type) {
 	}
 }
 
-int32_t main(int32_t argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 
