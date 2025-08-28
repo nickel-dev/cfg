@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
 
 		// Get the data structure type
 		if (section.tag_count) {
-			uint64_t hash = cfg_hash(section.tags[0]);
+			uint64_t hash = cfg_hash(section.tags[0]); // The first tag is the data structure type, meaning union, struct or enum
 			if (hash == struct_hash)
 				data_type = DATA_STRUCT;
 			else if (hash == enum_hash)
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
 		} else
 			continue;
 
-		// Starts at 1, because the 0th variable is the data structure type
+		// Get the data structure
 		for (uint32_t v = 0; v < section.count; ++v) {
 			cfg_variable_t variable = section.variables[v];
 			cfg_value_t value = variable.value;
