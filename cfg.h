@@ -45,8 +45,9 @@ struct cfg_variable {
 
 struct cfg_section {
 	char *name;
-	uint32_t count;
+	uint32_t count, tag_count;
 	cfg_variable_t *variables;
+	char **tags;
 };
 
 struct cfg_data {
@@ -58,7 +59,7 @@ struct cfg_data {
 uint64_t cfg_hash(char *string);
 
 // Sections
-cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index);
+cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index, uint32_t tag_count, char **tags);
 cfg_section_t *cfg_section_get(cfg_data_t *data, char *name);
 int64_t cfg_section_index(cfg_data_t *data, char *name);
 uint32_t cfg_section_pointer_index(cfg_data_t *data, cfg_section_t *section);
@@ -104,7 +105,8 @@ enum _cfg_token_type {
 	_CFG_TOKEN_FLOAT,
 	_CFG_TOKEN_LIST_BEGIN,
 	_CFG_TOKEN_LIST_END,
-	_CFG_TOKEN_ASSIGN
+	_CFG_TOKEN_ASSIGN,
+	_CFG_TOKEN_TAG,
 };
 
 struct _cfg_token {
@@ -114,11 +116,11 @@ struct _cfg_token {
 };
 
 // Internal functions
-static inline char *_cfg_bool_string(int32_t n) {
+static inline char *_cfg_string_bool(int32_t n) {
 	return (n ? "true" : "false");
 }
 
-static char *_cfg_copy_string(char *string) {
+static char *_cfg_string_copy(char *string) {
 	uint64_t l = strlen(string);
 	char *buffer = malloc(l + 1);
 	memcpy(buffer, string, l);
@@ -190,7 +192,7 @@ static char *_cfg_value_write(char *buffer, cfg_value_t value) {
 		buffer = _cfg_string_append(buffer, "\"%s\"", value.value_string);
 		break;
 	case CFG_BOOL:
-		buffer = _cfg_string_append(buffer, "%s", _cfg_bool_string(value.value_bool));
+		buffer = _cfg_string_append(buffer, "%s", _cfg_string_bool(value.value_bool));
 		break;
 	case CFG_LIST:
 		buffer = _cfg_string_append(buffer, "(");
@@ -245,6 +247,8 @@ static uint32_t _cfg_token_type(char c) {
 		return _CFG_TOKEN_LIST_END;
 	case '=':
 		return _CFG_TOKEN_ASSIGN;
+	case '@':
+		return _CFG_TOKEN_TAG;
 	default:
 		return _CFG_TOKEN_IDENTIFIER;
 	}
@@ -275,6 +279,8 @@ static _cfg_token_t *_cfg_tokenize(char *source) {
 		                      (full->type == _CFG_TOKEN_FLOAT && type == _CFG_TOKEN_INT))) {
 			full->string = _cfg_string_append_char(full->string, c);
 			full->type = _CFG_TOKEN_FLOAT;
+		} else if (!split && (full->type == _CFG_TOKEN_TAG && type == _CFG_TOKEN_IDENTIFIER)) {
+			full->string = _cfg_string_append_char(full->string, c);
 		} else {
 			full->next = calloc(1, sizeof(_cfg_token_t));
 			full = full->next;
@@ -338,7 +344,7 @@ uint64_t cfg_hash(char *string) {
 }
 
 // Sections
-cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index) {
+cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index, uint32_t tag_count, char **tags) {
 	if (index > data->count)
 		index = data->count;
 	++data->count;
@@ -350,11 +356,13 @@ cfg_section_t *cfg_section_add(cfg_data_t *data, char *name, uint32_t index) {
 	cfg_section_t *curr = &data->sections[index];
 
 	if (name)
-		curr->name = _cfg_copy_string(name);
+		curr->name = _cfg_string_copy(name);
 	else
 		curr->name = _cfg_string_append(NULL, "section%u", data->count);
 	curr->count = 0;
 	curr->variables = NULL;
+	curr->tag_count = tag_count;
+	curr->tags = tags;
 
 	return curr;
 }
@@ -438,7 +446,7 @@ cfg_value_t *cfg_list_add(cfg_list_t *list, cfg_value_t value, uint32_t index) {
 	memcpy(curr, &value, sizeof(cfg_value_t));
 	if (value.type == CFG_STRING) {
 		if (value.value_string)
-			curr->value_string = _cfg_copy_string(value.value_string);
+			curr->value_string = _cfg_string_copy(value.value_string);
 		else
 			curr->value_string = "";
 	}
@@ -477,14 +485,14 @@ cfg_variable_t *cfg_variable_add(cfg_section_t *section, char *name, cfg_value_t
 	cfg_variable_t *curr = &section->variables[index];
 
 	if (name)
-		curr->name = _cfg_copy_string(name);
+		curr->name = _cfg_string_copy(name);
 	else
 		curr->name = _cfg_string_append(NULL, "var%u", section->count);
 
 	curr->value = value;
 	if (value.type == CFG_STRING) {
 		if (value.value_string)
-			curr->value.value_string = _cfg_copy_string(value.value_string);
+			curr->value.value_string = _cfg_string_copy(value.value_string);
 		else
 			curr->value.value_string = "";
 	}
@@ -558,20 +566,32 @@ cfg_data_t cfg_data_read(char *source) {
 	cfg_data_t data = { 0 };
 	_cfg_token_t *root_token = _cfg_tokenize(source);
 
+	// Tags
+	uint32_t tag_count = 0;
+	char **tags = NULL;
+
 	// Parse the tokens
 	cfg_section_t *section = NULL;
 	for (_cfg_token_t *prev_token = NULL, *token = root_token; token != NULL; prev_token = token, token = token->next) {
 		switch (token->type) {
 		case _CFG_TOKEN_SECTION_END:
-			if (prev_token && prev_token->type == _CFG_TOKEN_SECTION_BEGIN)
-				section = cfg_section_add(&data, NULL, data.count);
+			if (prev_token && prev_token->type == _CFG_TOKEN_SECTION_BEGIN) {
+				section = cfg_section_add(&data, NULL, data.count, tag_count, tags);
+				tag_count = 0;
+				tags = NULL;
+			}
 			break;
 		case _CFG_TOKEN_SECTION:
-			section = cfg_section_add(&data, token->string, data.count);
+			section = cfg_section_add(&data, token->string, data.count, tag_count, tags);
+			tag_count = 0;
+			tags = NULL;
 			break;
 		case _CFG_TOKEN_ASSIGN: {
-			if (!section)
-				section = cfg_section_add(&data, NULL, data.count);
+			if (!section) {
+				section = cfg_section_add(&data, NULL, data.count, tag_count, tags);
+				tag_count = 0;
+				tags = NULL;
+			}
 			char *name = NULL;
 			if (prev_token && prev_token->type == _CFG_TOKEN_IDENTIFIER)
 				name = prev_token->string;
@@ -579,6 +599,11 @@ cfg_data_t cfg_data_read(char *source) {
 			cfg_variable_add(section, name, value, section->count);
 			break;
 		}
+		case _CFG_TOKEN_TAG:
+			++tag_count;
+			tags = realloc(tags, sizeof(char *) * tag_count);
+			tags[tag_count - 1] = _cfg_string_copy(token->string);
+			break;
 		default:
 			break;
 		}

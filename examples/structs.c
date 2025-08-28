@@ -29,9 +29,9 @@ int main(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 
-	const uint64_t struct_hash = cfg_hash("struct");
-	const uint64_t enum_hash = cfg_hash("enum");
-	const uint64_t union_hash = cfg_hash("union");
+	const uint64_t struct_hash = cfg_hash("@struct");
+	const uint64_t enum_hash = cfg_hash("@enum");
+	const uint64_t union_hash = cfg_hash("@union");
 
 	cfg_data_t data = cfg_data_read_file("structs.cfg");
 
@@ -40,12 +40,8 @@ int main(int argc, char *argv[]) {
 		uint32_t data_type = DATA_STRUCT;
 
 		// Get the data structure type
-		{
-			cfg_variable_t type = section.variables[0];
-			if (type.value.type != CFG_STRING) // The section has no data type defined
-				continue;
-
-			uint64_t hash = cfg_hash(type.value.value_string);
+		if (section.tag_count) {
+			uint64_t hash = cfg_hash(section.tags[0]);
 			if (hash == struct_hash)
 				data_type = DATA_STRUCT;
 			else if (hash == enum_hash)
@@ -57,10 +53,11 @@ int main(int argc, char *argv[]) {
 
 			printf("typedef %s %s %s_t;\n%s %s {\n", data_type_string(data_type), section.name, section.name,
 			                                         data_type_string(data_type), section.name);
-		}
+		} else
+			continue;
 
 		// Starts at 1, because the 0th variable is the data structure type
-		for (uint32_t v = 1; v < section.count; ++v) {
+		for (uint32_t v = 0; v < section.count; ++v) {
 			cfg_variable_t variable = section.variables[v];
 			cfg_value_t value = variable.value;
 
