@@ -106,7 +106,7 @@ enum _cfg_token_type {
 	_CFG_TOKEN_LIST_BEGIN,
 	_CFG_TOKEN_LIST_END,
 	_CFG_TOKEN_ASSIGN,
-	_CFG_TOKEN_TAG,
+	_CFG_TOKEN_TAG
 };
 
 struct _cfg_token {
@@ -279,7 +279,7 @@ static _cfg_token_t *_cfg_tokenize(char *source) {
 		                      (full->type == _CFG_TOKEN_FLOAT && type == _CFG_TOKEN_INT))) {
 			full->string = _cfg_string_append_char(full->string, c);
 			full->type = _CFG_TOKEN_FLOAT;
-		} else if (!split && (full->type == _CFG_TOKEN_TAG && type == _CFG_TOKEN_IDENTIFIER)) {
+		} else if (!split && full->type == _CFG_TOKEN_TAG) {
 			full->string = _cfg_string_append_char(full->string, c);
 		} else {
 			full->next = calloc(1, sizeof(_cfg_token_t));
@@ -400,6 +400,8 @@ void cfg_section_remove(cfg_data_t *data, uint32_t index) {
 
 	if (curr->name)
 		free(curr->name);
+	if (curr->tags)
+		free(curr->tags);
 	if (curr->variables) {
 		for (uint32_t i = 0; i < curr->count; ++i)
 			cfg_variable_remove(curr, i);

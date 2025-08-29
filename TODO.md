@@ -12,6 +12,6 @@
 - [x] Add negative numbers
 - [x] Function to get section and variable index by pointer offset
 - [x] Add cfg_data_free
-- [ ] Add dictionaries
-- [ ] Add sections tags
-- [ ] Free section tags
+- [x] Add section tags
+- [x] Fix tags
+- [x] Free section tags
